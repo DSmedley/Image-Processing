@@ -1,9 +1,7 @@
 from random_words import RandomWords
 from random import randrange
-import cv2
-import os
 from PIL import Image
-
+import cv2, os, time, json
 
 # TODO: Generate random number to determine how many spots to put the text = DONE
 # TODO: Get the height and width of the image = DONE
@@ -13,7 +11,7 @@ from PIL import Image
 # TODO: Choose random font = DONE
 # TODO: Apply the words onto the image = DONE
 # TODO: Log the name of the file, text, and text location onto a json object
-# TODO: Error handle when random words fail
+# TODO: Error handle when random words fail = Done
 
 
 def dont_overlap(new_bottom, new_left, new_top, new_right, current_words):
@@ -70,33 +68,54 @@ def get_text_location(new_word, new_font, new_font_scale, new_thickness):
     return new_bottom, new_left, new_top, new_right
 
 
+def write_json(image_name, array):
+    with open('dataset.json') as json_file:
+        data = json.load(json_file)
+        temp = data['images']
+        # python object to be appended
+        new_image = {image_name: []}
+        temp2 = new_image[image_name]
+        for word in array:
+            word_attributes = {'text': word[4], 'bottom': word[0], 'left': word[1], 'top': word[2], 'right': word[3]}
+            temp2.append(word_attributes)
+        # appending data to emp_details
+        temp.append(new_image)
+        print(data)
+
+    with open('dataset.json', 'w') as f:
+        json.dump(data, f, indent=4)
+
+
 if __name__ == "__main__":
     # Loop through the directory using each image
     for filename in os.listdir('unclassified_images'):
-        random_words = get_random_words()
-        img, height, width = get_image_attributes(filename)
-        no_text_allowed = []
+        ts = time.time()
+        for k in range(2):
+            random_words = get_random_words()
+            img, height, width = get_image_attributes(filename)
+            no_text_allowed = []
 
-        for i in range(randrange(15)):
-            # TODO: make sure the coordinates dont overlap so words dont overlap = DONE
-            word = random_words[randrange(49)]
-            font = randrange(7)
-            thickness = 2
-            # TODO: Randomize these parameters
-            font_scale = randrange(1, 2)
+            for i in range(randrange(15)):
+                # TODO: make sure the coordinates dont overlap so words dont overlap = DONE
+                word = random_words[randrange(49)]
+                font = randrange(7)
+                thickness = 2
+                # TODO: Randomize these parameters = DONE
+                font_scale = randrange(1, 2)
 
-            bottom, left, top, right = get_text_location(word, font, font_scale, thickness)
-            im = Image.open('unclassified_images/' + filename)  # Can be many different formats.
-            pix = im.load()
-            print(im.size)  # Get the width and hight of the image for iterating over
-            print(pix[left, bottom])  # Get the RGBA Value of the a pixel of an image
-            font_color = tuple(map(lambda i, j: i - j, pix[left, bottom], (255, 255, 255)))
-            print([(abs(i)) for i in font_color])
-            color = [(abs(i)) for i in font_color]
-            org = (left, bottom)
-            no_text_allowed.append([bottom, left, top, right])
-            img = cv2.putText(img, word, org, font, font_scale, color, thickness, cv2.LINE_AA)
+                bottom, left, top, right = get_text_location(word, font, font_scale, thickness)
+                im = Image.open('unclassified_images/' + filename)  # Can be many different formats.
+                pix = im.load()
+                font_color = [(abs(i)) for i in tuple(map(lambda i, j: i - j, pix[left, bottom], (255, 255, 255)))]
+                color = font_color
+                org = (left, bottom)
+                no_text_allowed.append([bottom, left, top, right, word])
+                img = cv2.putText(img, word, org, font, font_scale, color, thickness, cv2.LINE_AA)
 
-        cv2.imshow('image', img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+            new_file_name = str(ts)+'_'+str(k)+'.jpg'
+            write_json(new_file_name, no_text_allowed)
+            cv2.imwrite('classified_images/'+new_file_name, img)
+
+# TODO: Create an classified folder for classified images - DONE
+# TODO: Append image count to image name - DONE
+# TODO: Append JSON to store the file name, text, and text location - DONE
