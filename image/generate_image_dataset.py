@@ -1,7 +1,9 @@
-from random_word import RandomWords
+from random_words import RandomWords
 from random import randrange
 import cv2
 import os
+from PIL import Image
+
 
 # TODO: Generate random number to determine how many spots to put the text = DONE
 # TODO: Get the height and width of the image = DONE
@@ -14,9 +16,9 @@ import os
 # TODO: Error handle when random words fail
 
 
-def dont_overlap():
-    something = True
-    for current_word in no_text_allowed:
+def dont_overlap(new_bottom, new_left, new_top, new_right, current_words):
+    not_overlapped = True
+    for current_word in current_words:
         old_bottom = current_word[0]
         old_left = current_word[1]
         old_top = current_word[2]
@@ -31,13 +33,17 @@ def dont_overlap():
                 new_top_lower_old_bottom or
                 new_left_right_old_right or
                 new_right_left_old_left):
-            something = False
-    return something
+            not_overlapped = False
+    return not_overlapped
 
 
 def get_random_words():
     r = RandomWords()
-    return r.get_random_words()
+    try:
+        return r.random_words(count=50)
+    except:
+        print("Error: Invalid word")
+        get_random_words()
 
 
 def get_image_attributes(file):
@@ -45,6 +51,23 @@ def get_image_attributes(file):
     original_height = original_img.shape[0]
     original_width = original_img.shape[1]
     return original_img, original_height, original_width
+
+
+def get_text_location(new_word, new_font, new_font_scale, new_thickness):
+    # Find width and height of the word to make sure the whole word in on the image
+    (label_width, label_height), baseline = cv2.getTextSize(new_word, new_font, new_font_scale, new_thickness)
+    while True:
+        new_bottom = randrange(label_height + baseline, height)
+        new_left = randrange(width - label_width)
+        word_height = label_height + baseline
+        new_top = new_bottom - word_height
+        new_right = new_left + label_width
+
+        if len(no_text_allowed) == 0:
+            break
+        if dont_overlap(new_bottom, new_left, new_top, new_right, no_text_allowed):
+            break
+    return new_bottom, new_left, new_top, new_right
 
 
 if __name__ == "__main__":
@@ -61,24 +84,19 @@ if __name__ == "__main__":
             thickness = 2
             # TODO: Randomize these parameters
             font_scale = randrange(1, 2)
-            color = (0, 0, 0)
 
-            # Find width and height of the word to make sure the whole word in on the image
-            (label_width, label_height), baseline = cv2.getTextSize(word, font, font_scale, thickness)
-            while True:
-                new_bottom = randrange(label_height + baseline, height)
-                new_left = randrange(width - label_width)
-                new_top = new_bottom - label_height - baseline
-                new_right = new_left + label_width
+            bottom, left, top, right = get_text_location(word, font, font_scale, thickness)
+            im = Image.open('unclassified_images/' + filename)  # Can be many different formats.
+            pix = im.load()
+            print(im.size)  # Get the width and hight of the image for iterating over
+            print(pix[left, bottom])  # Get the RGBA Value of the a pixel of an image
+            font_color = tuple(map(lambda i, j: i - j, pix[left, bottom], (255, 255, 255)))
+            print([(abs(i)) for i in font_color])
+            color = [(abs(i)) for i in font_color]
+            org = (left, bottom)
+            no_text_allowed.append([bottom, left, top, right])
+            img = cv2.putText(img, word, org, font, font_scale, color, thickness, cv2.LINE_AA)
 
-                if len(no_text_allowed) == 0:
-                    break
-                if dont_overlap():
-                    break
-            org = (new_left, new_bottom)
-            no_text_allowed.append([new_bottom, new_left, new_top, new_right])
-            image = cv2.putText(img, word, org, font, font_scale, color, thickness, cv2.LINE_AA)
-
-        cv2.imshow('image', image)
+        cv2.imshow('image', img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
