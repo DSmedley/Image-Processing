@@ -1,5 +1,5 @@
 # USAGE
-# PARAMS: --east frozen_east_text_detection.pb --image image_samples\cows_86_11.jpg
+# PARAMS: --east frozen_east_text_detection.pb --image image_samples\car.jpg
 
 # import the necessary packages
 from imutils.object_detection import non_max_suppression
@@ -9,27 +9,28 @@ import time
 import cv2
 
 # construct the argument parser and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--image", type=str,
-                help="path to input image")
-ap.add_argument("-east", "--east", type=str,
-                help="path to input EAST text detector")
-ap.add_argument("-c", "--min-confidence", type=float, default=0.5,
-                help="minimum probability required to inspect a region")
-ap.add_argument("-w", "--width", type=int, default=320,
-                help="resized image width (should be multiple of 32)")
-ap.add_argument("-e", "--height", type=int, default=320,
-                help="resized image height (should be multiple of 32)")
-args = vars(ap.parse_args())
+# ap = argparse.ArgumentParser()
+# ap.add_argument("-i", "--image", type=str,
+#                 help="path to input image")
+# ap.add_argument("-east", "--east", type=str,
+#                 help="path to input EAST text detector")
+# ap.add_argument("-c", "--min-confidence", type=float, default=0.5,
+#                 help="minimum probability required to inspect a region")
+# ap.add_argument("-w", "--width", type=int, default=320,
+#                 help="resized image width (should be multiple of 32)")
+# ap.add_argument("-e", "--height", type=int, default=320,
+#                 help="resized image height (should be multiple of 32)")
+# args = vars(ap.parse_args())
 
 # load the input image and grab the image dimensions
-image = cv2.imread(args["image"])
+image = cv2.imread('image_samples/car.jpg')
 orig = image.copy()
 (H, W) = image.shape[:2]
 
 # set the new width and height and then determine the ratio in change
 # for both the width and height
-(newW, newH) = (args["width"], args["height"])
+# width and height is 320 x 320
+(newW, newH) = (320, 320)
 rW = W / float(newW)
 rH = H / float(newH)
 
@@ -46,7 +47,7 @@ layerNames = [
 
 # load the pre-trained EAST text detector
 print("[INFO] loading EAST text detector...")
-net = cv2.dnn.readNetFromTensorflow(args['east'])
+net = cv2.dnn.readNetFromTensorflow('frozen_east_text_detection.pb')
 
 # construct a blob from the image and then perform a forward pass of
 # the model to obtain the two output layer sets
@@ -82,7 +83,9 @@ for y in range(0, numRows):
     # loop over the number of columns
     for x in range(0, numCols):
         # if our score does not have sufficient probability, ignore it
-        if scoresData[x] < args["min_confidence"]:
+        # minimum probability required to inspect a region
+        min_confidence = .5 # default
+        if scoresData[x] < min_confidence:
             continue
 
         # compute the offset factor as our resulting feature maps will
