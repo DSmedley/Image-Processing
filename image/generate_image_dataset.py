@@ -3,6 +3,7 @@ from random import randrange
 from PIL import Image
 import cv2, os, time, json
 
+
 # TODO: Generate random number to determine how many spots to put the text = DONE
 # TODO: Get the height and width of the image = DONE
 # TODO: Choose said number of words from random words to put onto the image = DONE
@@ -44,10 +45,21 @@ def get_random_words():
         get_random_words()
 
 
+def resize_image(image, old_width, old_height):
+    scale_percentage = old_width / 1280
+    new_height = int(old_height / scale_percentage)
+
+    return cv2.resize(image, (1280, new_height)), 1280, new_height
+
+
 def get_image_attributes(file):
     original_img = cv2.imread('unclassified_images/' + file)
     original_height = original_img.shape[0]
     original_width = original_img.shape[1]
+
+    if original_width > 1280:
+        original_img, original_width, original_height = resize_image(original_img, original_width, original_height)
+
     return original_img, original_height, original_width
 
 
@@ -101,7 +113,7 @@ if __name__ == "__main__":
                 font = randrange(7)
                 thickness = 2
                 # TODO: Randomize these parameters = DONE
-                font_scale = randrange(1, 2)
+                font_scale = randrange(2, 3)
 
                 bottom, left, top, right = get_text_location(word, font, font_scale, thickness)
                 im = Image.open('unclassified_images/' + filename)  # Can be many different formats.
@@ -112,9 +124,13 @@ if __name__ == "__main__":
                 no_text_allowed.append([bottom, left, top, right, word])
                 img = cv2.putText(img, word, org, font, font_scale, color, thickness, cv2.LINE_AA)
 
-            new_file_name = str(ts)+'_'+str(k)+'.jpg'
+            # cv2.imshow('image', img)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
+
+            new_file_name = str(ts) + '_' + str(k) + '.jpg'
             write_json(new_file_name, no_text_allowed)
-            cv2.imwrite('classified_images/'+new_file_name, img)
+            cv2.imwrite('classified_images/' + new_file_name, img)
 
 # TODO: Create an classified folder for classified images - DONE
 # TODO: Append image count to image name - DONE
