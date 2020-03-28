@@ -1,8 +1,13 @@
-from random_words import RandomWords
+import re
 from random import randrange
-from PIL import Image
-import cv2, os, time, json
 
+import cv2
+import json
+import os
+import time
+import wcag_contrast_ratio as contrast
+from PIL import Image
+from random_words import RandomWords
 
 # TODO: Generate random number to determine how many spots to put the text = DONE
 # TODO: Get the height and width of the image = DONE
@@ -14,9 +19,11 @@ import cv2, os, time, json
 # TODO: Log the name of the file, text, and text location onto a json object
 # TODO: Error handle when random words fail = Done
 
+UNCLASSIFIED_FOLDER = "unclassified_images1"
+DATASET = 'dataset1.json'
+
 
 def dont_overlap(new_bottom, new_left, new_top, new_right, current_words):
-    print("Dont Overlap")
     not_overlapped = True
     for current_word in current_words:
         old_bottom = current_word[0]
@@ -38,7 +45,6 @@ def dont_overlap(new_bottom, new_left, new_top, new_right, current_words):
 
 
 def get_random_words():
-    print("Get random words")
     r = RandomWords()
     try:
         return r.random_words(count=50)
@@ -48,7 +54,6 @@ def get_random_words():
 
 
 def resize_image(image, old_width, old_height):
-    print("Resize image")
     scale_percentage = old_width / 1280
     new_height = int(old_height / scale_percentage)
 
@@ -56,8 +61,7 @@ def resize_image(image, old_width, old_height):
 
 
 def get_image_attributes(file):
-    print("Get image attributes")
-    original_img = cv2.imread('unclassified_images/' + file)
+    original_img = cv2.imread(UNCLASSIFIED_FOLDER + '/' + file)
     original_height = original_img.shape[0]
     original_width = original_img.shape[1]
 
@@ -68,13 +72,12 @@ def get_image_attributes(file):
 
 
 def get_text_location(new_word, new_font, new_font_scale, new_thickness, no_text, height, width):
-    print("Get text location")
     # Find width and height of the word to make sure the whole word in on the image
     (label_width, label_height), baseline = cv2.getTextSize(new_word, new_font, new_font_scale, new_thickness)
     while True:
-        new_bottom = randrange(label_height + baseline, height)
+        word_height = label_height
+        new_bottom = randrange(word_height, height)
         new_left = randrange(width - label_width)
-        word_height = label_height + baseline
         new_top = new_bottom - word_height
         new_right = new_left + label_width
 
@@ -82,12 +85,11 @@ def get_text_location(new_word, new_font, new_font_scale, new_thickness, no_text
             break
         if dont_overlap(new_bottom, new_left, new_top, new_right, no_text):
             break
-    return new_bottom, new_left, new_top, new_right
+    return new_bottom, new_left, new_top, new_right, baseline
 
 
 def write_json(image_name, array):
-    print("Write JSON")
-    with open('dataset.json') as json_file:
+    with open(DATASET) as json_file:
         data = json.load(json_file)
         temp = data['images']
         # python object to be appended
@@ -98,47 +100,55 @@ def write_json(image_name, array):
             temp2.append(word_attributes)
         # appending data to emp_details
         temp.append(new_image)
-        # print(data)
 
-    with open('dataset.json', 'w') as f:
+    with open(DATASET, 'w') as f:
         json.dump(data, f, indent=4)
+
+
+def get_font_color(color):
+    choices = [(1.0, 0, 0), (0, 1.0, 0), (0, 0, 1.0)]
+    if isinstance(color, int):
+        color = (color, color, color)
+    font_color = tuple(map(lambda s, j: s / j, color, (255, 255, 255)))
+    selected = 0
+    highest = 0
+    for choice in range(len(choices)):
+        value = contrast.rgb(choices[choice], font_color)
+        if value > highest:
+            highest = value
+            selected = choice
+    return tuple(map(lambda s, j: s * j, choices[selected], (255, 255, 255)))
 
 
 def classify():
     # Loop through the directory using each image
-    for filename in os.listdir('unclassified_images'):
-        print("Select file")
+    for filename in os.listdir(UNCLASSIFIED_FOLDER):
         ts = time.time()
-        im = Image.open('unclassified_images/' + filename)  # Can be many different formats.
+        im = Image.open(UNCLASSIFIED_FOLDER + '/' + filename)  # Can be many different formats.
         pix = im.load()
         img, height, width = get_image_attributes(filename)
-        print(height)
-        print(width)
 
         # Use each image 40 times
         for k in range(40):
-            print(f"Iterate file {k}")
             random_words = get_random_words()
             no_text_allowed = []
             new_img = img.copy()
 
             for q in range(randrange(15)):
-                print(f"Random word count {q}")
                 # TODO: make sure the coordinates dont overlap so words dont overlap = DONE
                 word = random_words[randrange(49)]
-                font = randrange(7)
+                font = randrange(4)
                 thickness = 2
                 # TODO: Randomize these parameters = DONE
                 font_scale = 1
 
-                bottom, left, top, right = get_text_location(word, font, font_scale, thickness, no_text_allowed, height, width)
-                print(left)
-                print(bottom)
-                color = pix[left, bottom]
-                if isinstance(color, int):
-                    color = (color, color, color)
-                font_color = [(abs(i)) for i in tuple(map(lambda s, j: s - j, color, (255, 255, 255)))]
+                bottom, left, top, right, base = get_text_location(word, font, font_scale, thickness, no_text_allowed,
+                                                                   height, width)
+                font_color = get_font_color(pix[left, bottom])
                 org = (left, bottom)
+                if re.search(r"\b\w*[gjpqy]\w*\b", word):
+                    print(f"Match word: {word}")
+                    bottom = bottom + base
                 no_text_allowed.append([bottom, left, top, right, word])
                 new_img = cv2.putText(new_img, word, org, font, font_scale, font_color, thickness, cv2.LINE_AA)
 
@@ -148,7 +158,7 @@ def classify():
 
             new_file_name = str(ts) + '_' + str(k) + '.jpg'
             write_json(new_file_name, no_text_allowed)
-            cv2.imwrite('classified_images/' + new_file_name, new_img)
+            cv2.imwrite('classified_images1/' + new_file_name, new_img)
 
 
 classify()
