@@ -48,51 +48,21 @@ def get_detected_text(boxes, words):
 
 
 def analyze(image, words):
-    # load the input image and grab the image dimensions
-    image = cv2.imread(f'{CLASSIFIED_FOLDER}/{image}')
-    orig = image.copy()
-    (H, W) = image.shape[:2]
+    height, image, ratio_height, ratio_width, width, original_image = get_resized_image(image)
 
-    # set the new width and height and then determine the ratio in change
-    # for both the width and height
-    # width and height is 320 x 320
-    (newW, newH) = (320, 320)
-    rW = W / float(newW)
-    rH = H / float(newH)
-
-    # resize the image and grab the new image dimensions
-    image = cv2.resize(image, (newW, newH))
-    (H, W) = image.shape[:2]
-
-    # define the two output layer names for the EAST detector model that
-    # we are interested -- the first is the output probabilities and the
-    # second can be used to derive the bounding box coordinates of text
-    layerNames = [
-        "feature_fusion/Conv_7/Sigmoid",
-        "feature_fusion/concat_3"]
-
-    # load the pre-trained EAST text detector
-    net = cv2.dnn.readNetFromTensorflow('frozen_east_text_detection.pb')
-
-    # construct a blob from the image and then perform a forward pass of
-    # the model to obtain the two output layer sets
-    blob = cv2.dnn.blobFromImage(image, 1.0, (W, H),
-                                 (123.68, 116.78, 103.94), swapRB=True, crop=False)
-    start = time.time()
-    net.setInput(blob)
-    (scores, geometry) = net.forward(layerNames)
-    end = time.time()
-    time_spent = end-start
+    # Geometry are bounding boxes that potentially contain words
+    # Scores are how confident we are that the bounding boxes actually containing a word
+    geometry, scores, time_spent = get_image_scores_geometry(height, image, width)
 
     # grab the number of rows and columns from the scores volume, then
-    # initialize our set of bounding box rectangles and corresponding
-    # confidence scores
-    (numRows, numCols) = scores.shape[2:4]
+    # initialize our set of bounding box rectangles and corresponding confidence scores
+    (num_rows, num_cols) = scores.shape[2:4]
+
     rects = []
     confidences = []
 
     # loop over the number of rows
-    for y in range(0, numRows):
+    for y in range(0, num_rows):
         # extract the scores (probabilities), followed by the geometrical
         # data used to derive potential bounding box coordinates that
         # surround text
@@ -102,13 +72,14 @@ def analyze(image, words):
         xData2 = geometry[0, 2, y]
         xData3 = geometry[0, 3, y]
         anglesData = geometry[0, 4, y]
-
+        counter = 0
         # loop over the number of columns
-        for x in range(0, numCols):
+        for x in range(0, num_cols):
             # if our score does not have sufficient probability, ignore it
             # minimum probability required to inspect a region
             min_confidence = .5  # default
             if scoresData[x] < min_confidence:
+                counter = counter + 1
                 continue
 
             # compute the offset factor as our resulting feature maps will
@@ -138,15 +109,57 @@ def analyze(image, words):
             rects.append((startX, startY, endX, endY))
             confidences.append(scoresData[x])
 
-    # apply non-maxima suppression to suppress weak, overlapping bounding
-    # boxes
+    # apply non-maxima suppression to suppress weak, overlapping bounding boxes
     boxes = non_max_suppression(np.array(rects), probs=confidences)
-    boxes = [[int(a * b) for a, b in zip(box, [rW, rH, rW, rH])] for box in boxes]
+    boxes = [[int(a * b) for a, b in zip(box, [ratio_width, ratio_height, ratio_width, ratio_height])] for box in boxes]
 
-    # show_found_box(boxes, orig)
-    # show_original_box(words, orig)
+    show_found_box(boxes, original_image)
+    show_original_box(words, original_image)
     false, found, percentage = get_detected_text(boxes, words)
     return false, found, percentage, time_spent
+
+
+def get_image_scores_geometry(height, image, width):
+    # names of our neural network layers
+    layer_names = [
+        "feature_fusion/Conv_7/Sigmoid",
+        "feature_fusion/concat_3"]
+
+    # load the pre-trained EAST text detector
+    # https://www.kaggle.com/yelmurat/frozen-east-text-detection
+    net = cv2.dnn.readNetFromTensorflow('frozen_east_text_detection.pb')
+
+    # Creating the two layer_names from our image -> blob
+    blob = cv2.dnn.blobFromImage(image, 1.0, (width, height), (123.68, 116.78, 103.94), swapRB=True, crop=False)
+
+    start = time.time()
+    net.setInput(blob)
+    (scores, geometry) = net.forward(layer_names)
+    end = time.time()
+    time_spent = end - start
+    return geometry, scores, time_spent
+
+
+def get_resized_image(image):
+    # load the input image and grab the image dimensions
+    image = cv2.imread(f'{CLASSIFIED_FOLDER}/{image}')
+    orig = image.copy()
+
+    # getting image height and width
+    (height, width) = image.shape[:2]
+
+    # setting width and height to 320 x 320
+    (new_width, new_height) = (320, 320)
+
+    # Getting the image ratio of height and width
+    ratio_width = width / float(new_width)
+    ratio_height = height / float(new_height)
+
+    # resize the image and grab the new image dimensions
+    image = cv2.resize(image, (new_width, new_height))
+    (height, width) = image.shape[:2]
+
+    return height, image, ratio_height, ratio_width, width, orig
 
 
 def show_found_box(boxes, orig):
@@ -184,6 +197,6 @@ with open(DATASET) as json_file:
     print(f"Total found: {total_found}")
     print(f"Total percentage: {total_percentage}")
     print(f"Total words: {total_words}")
-    print(f"Percentage of words found: {total_found/total_words}")
-    print(f"Average percentage of word detected: {total_percentage/total_found}")
-    print(f"Average time to analyze: {total_time/len(images)}")
+    print(f"Percentage of words found: {total_found / total_words}")
+    print(f"Average percentage of word detected: {total_percentage / total_found}")
+    print(f"Average time to analyze: {total_time / len(images)}")
